@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noticias en Tiempo Real</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>📰 Noticias en Tiempo Real</h1>
+        
+        <!-- Barra de búsqueda -->
+        <input type="text" id="searchInput" placeholder="🔎 Buscar noticias..." onkeyup="filtrarNoticias()">
+        
+        <!-- Botón para recargar -->
+        <button id="reloadButton">🔄 Recargar Noticias</button>
+
+        <!-- Barra de carga -->
+        <div id="progressContainer">
+            <p id="progressText">Procesando sitios: 0 / 0</p>
+            <progress id="progressBar" value="0" max="100"></progress>
+        </div>
+
+        <!-- Tabla de noticias -->
+        <table id="tablaNoticias">
+            <thead>
+                <tr>
+                    <th>Título</th>
+                    <th>Enlace</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <!-- Paginación -->
+        <div id="pagination">
+            <button id="prevPage">⬅ </button>
+            <span id="pageInfo">1</span>
+            <button id="nextPage">➡</button>
+        </div>
+    </div>
+
+    <script>
+        var socket = io();
+        let noticias = [];  // Guardará todas las noticias
+        let currentPage = 1;
+        let noticiasPorPagina = 10;
+
+        socket.emit('buscar_noticias', {});
+
+        socket.on('nueva_noticia', function(noticia) {
+            noticias.push(noticia);
+            mostrarNoticias();
+        });
+
+        socket.on('progreso', function (data) {
+            let progressBar = document.getElementById("progressBar");
+            progressBar.style.width = data.progreso + "%";
+            
+            // ✅ Mostrar "Procesando sitios: X / Y"
+            document.getElementById("progressText").textContent = `Procesando sitios: ${data.procesados} / ${data.total}`;
+        });
+
+        document.getElementById("reloadButton").addEventListener("click", function() {
+            document.getElementById("tablaNoticias").getElementsByTagName('tbody')[0].innerHTML = "";
+            noticias = [];
+            socket.emit('buscar_noticias', {});
+        });
+
+        function mostrarNoticias() {
+            let tbody = document.getElementById("tablaNoticias").getElementsByTagName('tbody')[0];
+            tbody.innerHTML = "";
+
+            let inicio = (currentPage - 1) * noticiasPorPagina;
+            let fin = inicio + noticiasPorPagina;
+            let noticiasPagina = noticias.slice(inicio, fin);
+
+            noticiasPagina.forEach(noticia => {
+                let row = tbody.insertRow();
+                row.insertCell(0).textContent = noticia.titulo;
+                let link = document.createElement("a");
+                link.href = noticia.enlace;
+                link.target = "_blank";
+                link.textContent = "🔗 Ver noticia";
+                row.insertCell(1).appendChild(link);
+            });
+
+            document.getElementById("pageInfo").textContent = `Página ${currentPage}`;
+        }
+
+        document.getElementById("prevPage").addEventListener("click", function() {
+            if (currentPage > 1) {
+                currentPage--;
+                mostrarNoticias();
+            }
+        });
+
+        document.getElementById("nextPage").addEventListener("click", function() {
+            if (currentPage * noticiasPorPagina < noticias.length) {
+                currentPage++;
+                mostrarNoticias();
+            }
+        });
+
+        function filtrarNoticias() {
+            let filtro = document.getElementById("searchInput").value.toLowerCase();
+            let tbody = document.getElementById("tablaNoticias").getElementsByTagName('tbody')[0];
+            tbody.innerHTML = "";
+
+            let noticiasFiltradas = noticias.filter(noticia => noticia.titulo.toLowerCase().includes(filtro));
+
+            noticiasFiltradas.forEach(noticia => {
+                let row = tbody.insertRow();
+                row.insertCell(0).textContent = noticia.titulo;
+                let link = document.createElement("a");
+                link.href = noticia.enlace;
+                link.target = "_blank";
+                link.textContent = "🔗 Ver noticia";
+                row.insertCell(1).appendChild(link);
+            });
+        }
+    </script>
+</body>
+</html>
