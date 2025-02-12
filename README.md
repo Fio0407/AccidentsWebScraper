@@ -1,2 +1,2 @@
 # AccidentsWebScraper
-A news web scrapers center around accidents
+A news web scraper focused on accident-related incidents.
