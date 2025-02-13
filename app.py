@@ -10,7 +10,7 @@ from urllib.parse import urljoin, urlparse
 app = Flask(__name__)
 socketio = SocketIO(app)  # Habilitar WebSockets
 
-keywords = ['accidente', 'incendio', 'lluvias', 'huayco', 'sequía', 'sismo', 'caída de bus', 'muertos', 'bloqueo']
+keywords = ['accidente', 'incendio', 'lluvias', 'huayco', 'sequía', 'sismo', 'caída de bus', 'muertos', 'bloqueo','huaico','quebradas','desborde','deslizamiento','derrumbe','inundación','desborde']
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
