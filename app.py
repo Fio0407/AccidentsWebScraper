@@ -1,16 +1,17 @@
-from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO
+from flask import Flask, render_template, jsonify
 import requests
 from bs4 import BeautifulSoup
 import random
 import time
-import re
+import threading
 from urllib.parse import urljoin, urlparse
 
 app = Flask(__name__)
-socketio = SocketIO(app)  # Habilitar WebSockets
 
-keywords = ['accidente', 'incendio', 'lluvias', 'huayco', 'sequía', 'sismo', 'caída de bus', 'muertos', 'bloqueo','huaico','quebradas','desborde','deslizamiento','derrumbe','inundación','desborde']
+keywords = ['accidente', 'incendio', 'lluvias', 'huayco', 'sequía', 'sismo', 
+            'caída de bus', 'muertos', 'bloqueo', 'huaico', 'quebradas', 
+            'desborde', 'deslizamiento', 'derrumbe', 'inundación']
+
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
@@ -20,8 +21,8 @@ user_agents = [
 session = requests.Session()
 titulos_vistos = set()
 noticias_extraidas = []
-PAGINACION_LIMIT = 10  # Número de noticias por página
-noticias_globales = []
+sitios_web = []
+sitios_procesados = 0
 
 def cargar_sitios_web(archivo):
     sitios = []
@@ -36,7 +37,7 @@ def cargar_sitios_web(archivo):
     return sitios
 
 def extract_headlines(base_url):
-    global noticias_extraidas
+    global noticias_extraidas, sitios_procesados
     try:
         headers = {"User-Agent": random.choice(user_agents)}
         response = session.get(base_url, headers=headers, timeout=10)
@@ -61,11 +62,21 @@ def extract_headlines(base_url):
                 noticia = {"titulo": title, "enlace": href}
                 noticias_extraidas.append(noticia)
                 titulos_vistos.add(title)
-                socketio.emit('nueva_noticia', noticia)
                 time.sleep(0.5)
+        
+        sitios_procesados += 1  # Incrementa el número de sitios procesados
 
     except requests.RequestException as e:
         print(f'❌ Error al acceder a {base_url}: {e}')
+
+def iniciar_extraccion():
+    global sitios_web, sitios_procesados
+    sitios_web = cargar_sitios_web('sitios.txt')
+    sitios_procesados = 0  # Reiniciar contador
+    while True:
+        for sitio in sitios_web:
+            extract_headlines(sitio)
+        time.sleep(600)  # Vuelve a escanear cada 10 minutos
 
 @app.route('/')
 def home():
@@ -73,25 +84,18 @@ def home():
 
 @app.route('/noticias')
 def get_noticias():
-    page = int(request.args.get('page', 1))
-    start = (page - 1) * PAGINACION_LIMIT
-    end = start + PAGINACION_LIMIT
-    return jsonify(noticias_extraidas[start:end])
+    return jsonify(noticias_extraidas)
 
-@socketio.on('buscar_noticias')
-def buscar_noticias(_):
-    global titulos_vistos, noticias_globales
-    titulos_vistos.clear()
-    noticias_globales.clear()
-    sitios = cargar_sitios_web('sitios.txt')
-
-    total_sitios = len(sitios)  # ✅ Definir el total de sitios
-
-    for index, sitio in enumerate(sitios):
-        extract_headlines(sitio)
-        progress = (index + 1) / total_sitios * 100
-        socketio.emit('progreso', {"progreso": progress, "procesados": index + 1, "total": total_sitios})  # ✅ Enviar datos completos
-
+@app.route('/progreso')
+def progreso():
+    return jsonify({
+        "procesados": sitios_procesados,
+        "total": len(sitios_web)
+    })
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    # Iniciar el proceso de extracción en segundo plano
+    thread = threading.Thread(target=iniciar_extraccion, daemon=True)
+    thread.start()
+      
+    app.run(debug=True)

@@ -4,123 +4,100 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Noticias en Tiempo Real</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>📰 Noticias en Tiempo Real</h1>
-        
-        <!-- Barra de búsqueda -->
-        <input type="text" id="searchInput" placeholder="🔎 Buscar noticias..." onkeyup="filtrarNoticias()">
-        
-        <!-- Botón para recargar -->
-        <button id="reloadButton">🔄 Recargar Noticias</button>
+    <h1>📰 Noticias en Tiempo Real</h1>
+    <div class="top-bar">
+        <input type="text" class="search-bar" id="searchInput" placeholder="Buscar noticias..." oninput="filtrarNoticias()">
+        <button class="recargar" onclick="cargarNoticias()">🔄 Recargar Noticias</button>
+    </div>
+    
+    <!-- Contador de progreso -->
+    <div id="progreso-texto" class="status-text">Procesando: 0 / 70 sitios...</div>
+    
+    <!-- Barra de progreso -->
+    <div class="progress-container">
+        <div id="progress-bar" class="progress-bar"></div>
+    </div>
 
-        <!-- Barra de carga -->
-        <div id="progressContainer">
-            <p id="progressText">Procesando sitios: 0 / 0</p>
-            <progress id="progressBar" value="0" max="100"></progress>
-        </div>
-
-        <!-- Tabla de noticias -->
-        <table id="tablaNoticias">
-            <thead>
-                <tr>
-                    <th>Título</th>
-                    <th>Enlace</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-
-        <!-- Paginación -->
-        <div id="pagination">
-            <button id="prevPage">⬅ </button>
-            <span id="pageInfo">1</span>
-            <button id="nextPage">➡</button>
+    <div class="contenedor">
+        <div id="noticias"></div>
+        <div class="paginacion">
+            <button id="prevPage" onclick="cambiarPagina(-1)" disabled>Anterior</button>
+            <span id="pageInfo"></span>
+            <button id="nextPage" onclick="cambiarPagina(1)">Siguiente</button>
         </div>
     </div>
 
     <script>
-        var socket = io();
-        let noticias = [];  // Guardará todas las noticias
-        let currentPage = 1;
-        let noticiasPorPagina = 10;
+        let noticias = [];
+        let noticiasFiltradas = [];
+        let paginaActual = 1;
+        const noticiasPorPagina = 7;
+        let sitiosProcesados = 0;
+        const totalSitios = 70;
 
-        socket.emit('buscar_noticias', {});
-
-        socket.on('nueva_noticia', function(noticia) {
-            noticias.push(noticia);
+        async function cargarNoticias() {
+            const response = await fetch('/noticias');
+            noticias = await response.json();
+            noticiasFiltradas = noticias;
+            paginaActual = 1;
             mostrarNoticias();
-        });
-
-        socket.on('progreso', function (data) {
-            let progressBar = document.getElementById("progressBar");
-            progressBar.style.width = data.progreso + "%";
-            
-            // ✅ Mostrar "Procesando sitios: X / Y"
-            document.getElementById("progressText").textContent = `Procesando sitios: ${data.procesados} / ${data.total}`;
-        });
-
-        document.getElementById("reloadButton").addEventListener("click", function() {
-            document.getElementById("tablaNoticias").getElementsByTagName('tbody')[0].innerHTML = "";
-            noticias = [];
-            socket.emit('buscar_noticias', {});
-        });
+        }
 
         function mostrarNoticias() {
-            let tbody = document.getElementById("tablaNoticias").getElementsByTagName('tbody')[0];
-            tbody.innerHTML = "";
+    const inicio = (paginaActual - 1) * noticiasPorPagina;
+    const fin = inicio + noticiasPorPagina;
+    const noticiasPagina = noticiasFiltradas.slice(inicio, fin);
 
-            let inicio = (currentPage - 1) * noticiasPorPagina;
-            let fin = inicio + noticiasPorPagina;
-            let noticiasPagina = noticias.slice(inicio, fin);
+    const contenedor = document.getElementById('noticias');
+    contenedor.innerHTML = '';
 
-            noticiasPagina.forEach(noticia => {
-                let row = tbody.insertRow();
-                row.insertCell(0).textContent = noticia.titulo;
-                let link = document.createElement("a");
-                link.href = noticia.enlace;
-                link.target = "_blank";
-                link.textContent = "🔗 Ver noticia";
-                row.insertCell(1).appendChild(link);
-            });
+    noticiasPagina.forEach(noticia => {
+        const div = document.createElement('div');
+        div.classList.add('noticia');
+        div.innerHTML = `<span>${noticia.titulo}</span>  
+                         <a href="${noticia.enlace}" target="_blank">🔗 Enlace</a>`;
+        contenedor.appendChild(div);
+    });
 
-            document.getElementById("pageInfo").textContent = `Página ${currentPage}`;
+    document.getElementById('pageInfo').textContent = `${paginaActual} de ${Math.ceil(noticiasFiltradas.length / noticiasPorPagina)}`;
+
+    document.getElementById('prevPage').disabled = paginaActual === 1;
+    document.getElementById('nextPage').disabled = fin >= noticiasFiltradas.length;
+}
+
+
+        function cambiarPagina(direccion) {
+            paginaActual += direccion;
+            mostrarNoticias();
         }
-
-        document.getElementById("prevPage").addEventListener("click", function() {
-            if (currentPage > 1) {
-                currentPage--;
-                mostrarNoticias();
-            }
-        });
-
-        document.getElementById("nextPage").addEventListener("click", function() {
-            if (currentPage * noticiasPorPagina < noticias.length) {
-                currentPage++;
-                mostrarNoticias();
-            }
-        });
 
         function filtrarNoticias() {
-            let filtro = document.getElementById("searchInput").value.toLowerCase();
-            let tbody = document.getElementById("tablaNoticias").getElementsByTagName('tbody')[0];
-            tbody.innerHTML = "";
-
-            let noticiasFiltradas = noticias.filter(noticia => noticia.titulo.toLowerCase().includes(filtro));
-
-            noticiasFiltradas.forEach(noticia => {
-                let row = tbody.insertRow();
-                row.insertCell(0).textContent = noticia.titulo;
-                let link = document.createElement("a");
-                link.href = noticia.enlace;
-                link.target = "_blank";
-                link.textContent = "🔗 Ver noticia";
-                row.insertCell(1).appendChild(link);
-            });
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            noticiasFiltradas = noticias.filter(noticia => noticia.titulo.toLowerCase().includes(query));
+            paginaActual = 1;
+            mostrarNoticias();
         }
+
+        async function actualizarProgreso() {
+            const response = await fetch('/progreso');  // Suponiendo que el backend devuelve { procesados: X }
+            const data = await response.json();
+            sitiosProcesados = data.procesados;
+
+            const porcentaje = (sitiosProcesados / totalSitios) * 100;
+            document.getElementById('progreso-texto').textContent = `Procesando: ${sitiosProcesados} / ${totalSitios} sitios...`;
+            document.getElementById('progress-bar').style.width = `${porcentaje}%`;
+
+            if (sitiosProcesados < totalSitios) {
+                setTimeout(actualizarProgreso, 2000); // Reintentar cada 2 segundos
+            }
+        }
+
+        setInterval(cargarNoticias, 5000); // Actualiza noticias cada 5 segundos
+        cargarNoticias();
+        actualizarProgreso(); // Inicia la actualización del progreso
     </script>
 </body>
 </html>
