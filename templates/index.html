@@ -10,7 +10,7 @@
     <h1>📰 Noticias en Tiempo Real</h1>
     <div class="top-bar">
         <input type="text" class="search-bar" id="searchInput" placeholder="Buscar noticias..." oninput="filtrarNoticias()">
-        <button class="recargar" onclick="cargarNoticias()">🔄 Recargar Noticias</button>
+        <button class="recargar" onclick="recargarNoticias()">🔄 Recargar Noticias</button>
     </div>
     
     <!-- Contador de progreso -->
@@ -39,12 +39,57 @@
         const totalSitios = 70;
 
         async function cargarNoticias() {
-            const response = await fetch('/noticias');
-            noticias = await response.json();
-            noticiasFiltradas = noticias;
-            paginaActual = 1;
-            mostrarNoticias();
+            try {
+                const response = await fetch('http://127.0.0.1:5000/noticias');
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+
+                const data = await response.json();
+                if (!Array.isArray(data)) {
+                    throw new Error("El servidor no devolvió un array.");
+                }
+
+                noticias = data;
+
+                // 🔥 Mantener el filtro activo
+                const query = document.getElementById('searchInput').value.toLowerCase();
+                if (query) {
+                    noticiasFiltradas = noticias.filter(noticia => noticia.titulo.toLowerCase().includes(query));
+                } else {
+                    noticiasFiltradas = noticias; // Restaurar todas las noticias si no hay búsqueda activa
+                }
+
+                mostrarNoticias();
+            } catch (error) {
+                console.error("Error al cargar noticias:", error);
+            }
         }
+
+        async function recargarNoticias() {
+            console.log("🔄 Reiniciando extracción de noticias...");
+
+            // Resetear variables de estado
+            noticias = [];
+            noticiasFiltradas = [];
+            paginaActual = 1;
+            sitiosProcesados = 0;
+
+            // Reiniciar la barra de progreso y el texto
+            document.getElementById('progreso-texto').textContent = `Procesando: 0 / ${totalSitios} sitios...`;
+            document.getElementById('progress-bar').style.width = "0%";
+
+            // Vaciar la lista de noticias en el DOM
+            document.getElementById('noticias').innerHTML = '<p>🔄 Cargando noticias...</p>';
+
+            // Enviar solicitud al backend para reiniciar el proceso
+            await fetch('/reiniciar', { method: 'POST' });
+
+            // Iniciar la actualización del progreso y recargar las noticias periódicamente
+            actualizarProgreso();
+            intervaloNoticias = setInterval(cargarNoticias, 5000);
+        }
+
 
         function mostrarNoticias() {
     const inicio = (paginaActual - 1) * noticiasPorPagina;
@@ -81,8 +126,10 @@
             mostrarNoticias();
         }
 
+        let intervaloNoticias;
+
         async function actualizarProgreso() {
-            const response = await fetch('/progreso');  // Suponiendo que el backend devuelve { procesados: X }
+            const response = await fetch('/progreso');
             const data = await response.json();
             sitiosProcesados = data.procesados;
 
@@ -91,13 +138,22 @@
             document.getElementById('progress-bar').style.width = `${porcentaje}%`;
 
             if (sitiosProcesados < totalSitios) {
-                setTimeout(actualizarProgreso, 2000); // Reintentar cada 2 segundos
+                setTimeout(actualizarProgreso, 2000); // Seguir actualizando
+            } else {
+                document.getElementById('progreso-texto').textContent = "✅ Extracción completada.";
+                
+                // ✅ Detener la actualización automática de noticias
+                if (intervaloNoticias) {
+                    clearInterval(intervaloNoticias);
+                    console.log("⏹️ Se detuvo la actualización automática de noticias.");
+                }
             }
         }
 
-        setInterval(cargarNoticias, 5000); // Actualiza noticias cada 5 segundos
+        // Solo iniciar el intervalo si hay progreso pendiente
+        intervaloNoticias = setInterval(cargarNoticias, 5000);
         cargarNoticias();
-        actualizarProgreso(); // Inicia la actualización del progreso
+        actualizarProgreso(); 
     </script>
 </body>
 </html>
